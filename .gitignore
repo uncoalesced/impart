@@ -1,0 +1,48 @@
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+build/
+.gradle/
+.kotlin/
+.build-outputs/
+
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+
+# Secrets, Environment & Firebase Configs
+.env
+*.env
+google-services.json
+service-account*.json
+*.keystore
+*.jks
+!debug.keystore
+
+# Node / Firebase Functions
+functions/node_modules/
+functions/lib/
+functions/.project
+
+# OS & Log files
+.DS_Store
+Thumbs.db
+*.log
