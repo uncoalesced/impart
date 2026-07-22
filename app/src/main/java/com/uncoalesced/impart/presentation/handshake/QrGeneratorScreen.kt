@@ -2,20 +2,23 @@
 package com.uncoalesced.impart.presentation.handshake
 
 import android.graphics.Bitmap
-import android.graphics.Color
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
-import com.uncoalesced.impart.presentation.theme.ImpartBackground
-import com.uncoalesced.impart.presentation.theme.ImpartPanicRed
+import com.uncoalesced.impart.presentation.theme.*
 
 @Composable
 fun QrGeneratorScreen(payloadJson: String) {
@@ -23,22 +26,53 @@ fun QrGeneratorScreen(payloadJson: String) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(ImpartBackground),
+            .background(ImpartBackground)
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = "QR Code",
-                modifier = Modifier.size(250.dp)
-            )
-        } else {
-            Text("Failed to generate QR", color = ImpartPanicRed)
+        Text(
+            text = "NODE HANDSHAKE",
+            color = ImpartSecondary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 2.sp
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Text(
+            text = "SCAN TO CONNECT",
+            color = ImpartTextPrimary,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = ImpartSecondary.copy(alpha = 0.15f)),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Box(modifier = Modifier.padding(24.dp)) {
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "QR Code",
+                        modifier = Modifier.size(250.dp)
+                    )
+                } else {
+                    Text(
+                        text = "FAILED TO GENERATE",
+                        color = ImpartPanicRed,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
 }
-
 
 private fun generateQrCode(content: String): Bitmap? {
     return try {
@@ -47,9 +81,13 @@ private fun generateQrCode(content: String): Bitmap? {
         val width = bitMatrix.width
         val height = bitMatrix.height
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+        
+        val fgColor = android.graphics.Color.parseColor("#2B2D42") // ImpartBackground
+        val bgColor = android.graphics.Color.parseColor("#EDF2F4") // ImpartTextPrimary
+        
         for (x in 0 until width) {
             for (y in 0 until height) {
-                bitmap.setPixel(x, y, if (bitMatrix.get(x, y)) Color.BLACK else Color.WHITE)
+                bitmap.setPixel(x, y, if (bitMatrix.get(x, y)) fgColor else bgColor)
             }
         }
         bitmap
