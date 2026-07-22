@@ -19,10 +19,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.uncoalesced.impart.core.security.DuressManager
 import com.uncoalesced.impart.presentation.contacts.ContactMatrixScreen
 import com.uncoalesced.impart.presentation.contacts.ContactMatrixViewModel
 import com.uncoalesced.impart.presentation.dashboard.DashboardScreen
 import com.uncoalesced.impart.presentation.dashboard.DashboardViewModel
+import com.uncoalesced.impart.presentation.decoy.NodeCorruptedScreen
 import com.uncoalesced.impart.presentation.handshake.HandshakeViewModel
 import com.uncoalesced.impart.presentation.handshake.QrGeneratorScreen
 import com.uncoalesced.impart.presentation.handshake.QrScannerScreen
@@ -33,9 +35,13 @@ import com.uncoalesced.impart.presentation.theme.ImpartTextPrimary
 import com.uncoalesced.impart.presentation.theme.ImpartTheme
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.UUID
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var duressManager: DuressManager
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -48,14 +54,21 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             ImpartTheme {
-                MainAppScreen()
+                if (duressManager.isNodeCorrupted()) {
+                    NodeCorruptedScreen()
+                } else {
+                    MainAppScreen()
+                }
             }
         }
     }
 
     private fun checkPermissions() {
         val permissions = mutableListOf(
-            Manifest.permission.CAMERA
+            Manifest.permission.CAMERA,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.RECORD_AUDIO
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)

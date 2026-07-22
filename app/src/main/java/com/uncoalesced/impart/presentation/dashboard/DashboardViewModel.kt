@@ -3,10 +3,16 @@ package com.uncoalesced.impart.presentation.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.uncoalesced.impart.core.security.CloakManager
+import com.uncoalesced.impart.core.security.DuressManager
+import com.uncoalesced.impart.core.security.PinVerificationResult
+import com.uncoalesced.impart.core.util.LocationHelper
 import com.uncoalesced.impart.domain.model.Contact
 import com.uncoalesced.impart.domain.repository.ContactRepository
 import com.uncoalesced.impart.domain.repository.RelayManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,17 +24,24 @@ sealed interface DashboardUiState {
     object Idle : DashboardUiState
     object Loading : DashboardUiState
     object Success : DashboardUiState
+    object NodeCorrupted : DashboardUiState
     data class Error(val message: String) : DashboardUiState
 }
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     contactRepository: ContactRepository,
-    private val relayManager: RelayManager
+    private val relayManager: RelayManager,
+    private val locationHelper: LocationHelper,
+    private val duressManager: DuressManager,
+    private val cloakManager: CloakManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DashboardUiState>(DashboardUiState.Idle)
     val uiState: StateFlow<DashboardUiState> = _uiState
+
+    private val _isCloaked = MutableStateFlow(cloakManager.isCloaked())
+    val isCloaked: StateFlow<Boolean> = _isCloaked
 
     val activeContacts: StateFlow<List<Contact>> = contactRepository.getActiveContacts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -37,7 +50,15 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = DashboardUiState.Loading
             
-            val result = relayManager.dispatchPanic(contact.fcmToken, contact.publicKeyBase64)
+            val loc = locationHelper.getCurrentLocation()
+            
+            val result = relayManager.dispatchPanic(
+                contact.fcmToken, 
+                contact.publicKeyBase64,
+                loc?.first,
+                loc?.second
+            )
+            
             if (result.isSuccess) {
                 _uiState.value = DashboardUiState.Success
             } else {
@@ -45,6 +66,49 @@ class DashboardViewModel @Inject constructor(
             }
         }
     }
+
+    fun broadcastPanic(contacts: List<Contact>) {
+        if (contacts.isEmpty()) return
+        
+        viewModelScope.launch {
+            _uiState.value = DashboardUiState.Loading
+            
+            val loc = locationHelper.getCurrentLocation()
+            
+            val deferreds = contacts.map { contact ->
+                async {
+                    relayManager.dispatchPanic(
+                        contact.fcmToken, 
+                        contact.publicKeyBase64,
+                        loc?.first,
+                        loc?.second
+                    )
+                }
+            }
+            
+            val results = deferreds.awaitAll()
+            if (results.any { it.isFailure }) {
+                _uiState.value = DashboardUiState.Error("One or more dispatches failed.")
+            } else {
+                _uiState.value = DashboardUiState.Success
+            }
+        }
+    }
+
+    fun verifySecurityPin(pin: String): PinVerificationResult {
+        val result = duressManager.verifyPin(pin)
+        if (result == PinVerificationResult.DURESS_TRIGGERED) {
+            _uiState.value = DashboardUiState.NodeCorrupted
+        }
+        return result
+    }
+
+    fun toggleCloakMode(enabled: Boolean) {
+        cloakManager.setCloakEnabled(enabled)
+        _isCloaked.value = enabled
+    }
+
+    fun isNodeCorrupted(): Boolean = duressManager.isNodeCorrupted()
 
     fun resetState() {
         _uiState.value = DashboardUiState.Idle

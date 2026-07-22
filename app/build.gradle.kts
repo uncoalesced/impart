@@ -93,4 +93,7 @@ dependencies {
     implementation(libs.camerax.lifecycle)
     implementation(libs.camerax.view)
     implementation(libs.mlkit.barcode.scanning)
+
+    // Location
+    implementation("com.google.android.gms:play-services-location:21.3.0")
 }
