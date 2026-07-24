@@ -11,6 +11,7 @@ data class ContactEntity(
     val fcmToken: String,
     val publicKeyBase64: String,
     val nickname: String?,
+    val phoneNumber: String?,
     val addedAt: Long,
     val revoked: Boolean
 ) {
@@ -19,6 +20,7 @@ data class ContactEntity(
         fcmToken = fcmToken,
         publicKeyBase64 = publicKeyBase64,
         nickname = nickname,
+        phoneNumber = phoneNumber,
         addedAt = addedAt,
         revoked = revoked
     )
@@ -29,6 +31,7 @@ data class ContactEntity(
             fcmToken = contact.fcmToken,
             publicKeyBase64 = contact.publicKeyBase64,
             nickname = contact.nickname,
+            phoneNumber = contact.phoneNumber,
             addedAt = contact.addedAt,
             revoked = contact.revoked
         )
