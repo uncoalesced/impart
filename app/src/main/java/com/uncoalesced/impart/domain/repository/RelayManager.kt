@@ -5,12 +5,14 @@ interface RelayManager {
     suspend fun dispatchPanic(
         targetFcmToken: String, 
         counterpartPublicKeyBase64: String,
+        targetPhoneNumber: String? = null,
         lat: Double? = null,
         lng: Double? = null
     ): Result<Unit>
 
     suspend fun dispatchAck(
         targetFcmToken: String,
-        counterpartPublicKeyBase64: String
+        counterpartPublicKeyBase64: String,
+        targetPhoneNumber: String? = null
     ): Result<Unit>
 }
