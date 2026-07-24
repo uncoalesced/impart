@@ -1,22 +1,25 @@
 // Engineered by uncoalesced
 package com.uncoalesced.impart.data.remote
 
+import android.telephony.SmsManager
 import com.google.firebase.FirebaseApp
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.ktx.functions
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.messaging.FirebaseMessaging
 import com.uncoalesced.impart.core.security.CryptoManager
+import com.uncoalesced.impart.core.util.NetworkUtils
 import com.uncoalesced.impart.domain.repository.RelayManager
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
-import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class RelayManagerImpl @Inject constructor(
-    private val cryptoManager: CryptoManager
+    private val cryptoManager: CryptoManager,
+    private val networkUtils: NetworkUtils
 ) : RelayManager {
 
     private fun getFunctions(): FirebaseFunctions? {
@@ -40,13 +43,11 @@ class RelayManagerImpl @Inject constructor(
     override suspend fun dispatchPanic(
         targetFcmToken: String, 
         counterpartPublicKeyBase64: String,
+        targetPhoneNumber: String?,
         lat: Double?,
         lng: Double?
     ): Result<Unit> {
         return try {
-            val functions = getFunctions()
-                ?: return Result.failure(IllegalStateException("Firebase is not initialized."))
-            
             val myToken = getMyFcmToken()
             val myPublicKey = cryptoManager.getPublicKey()
             
@@ -63,6 +64,13 @@ class RelayManagerImpl @Inject constructor(
             val plaintextPayload = payloadObj.toString()
             val ciphertext = cryptoManager.encrypt(plaintextPayload, counterpartPublicKeyBase64)
 
+            if (!networkUtils.isNetworkAvailable()) {
+                return dispatchSmsFallback(targetPhoneNumber, ciphertext)
+            }
+
+            val functions = getFunctions()
+                ?: return dispatchSmsFallback(targetPhoneNumber, ciphertext)
+
             val data = hashMapOf(
                 "targetFcmToken" to targetFcmToken,
                 "envelope" to hashMapOf(
@@ -70,8 +78,14 @@ class RelayManagerImpl @Inject constructor(
                 )
             )
 
-            functions.getHttpsCallable("initiatePanic").call(data).await()
-            Result.success(Unit)
+            try {
+                withTimeout(3000L) {
+                    functions.getHttpsCallable("initiatePanic").call(data).await()
+                }
+                Result.success(Unit)
+            } catch (e: Exception) {
+                dispatchSmsFallback(targetPhoneNumber, ciphertext)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             Result.failure(e)
@@ -80,17 +94,22 @@ class RelayManagerImpl @Inject constructor(
 
     override suspend fun dispatchAck(
         targetFcmToken: String,
-        counterpartPublicKeyBase64: String
+        counterpartPublicKeyBase64: String,
+        targetPhoneNumber: String?
     ): Result<Unit> {
         return try {
-            val functions = getFunctions()
-                ?: return Result.failure(IllegalStateException("Firebase is not initialized."))
-            
             val payloadObj = JSONObject().apply {
                 put("type", "ACK")
             }
             val plaintextPayload = payloadObj.toString()
             val ciphertext = cryptoManager.encrypt(plaintextPayload, counterpartPublicKeyBase64)
+
+            if (!networkUtils.isNetworkAvailable()) {
+                return dispatchSmsFallback(targetPhoneNumber, ciphertext)
+            }
+
+            val functions = getFunctions()
+                ?: return dispatchSmsFallback(targetPhoneNumber, ciphertext)
 
             val data = hashMapOf(
                 "targetFcmToken" to targetFcmToken,
@@ -99,7 +118,32 @@ class RelayManagerImpl @Inject constructor(
                 )
             )
 
-            functions.getHttpsCallable("initiatePanic").call(data).await()
+            try {
+                withTimeout(3000L) {
+                    functions.getHttpsCallable("initiatePanic").call(data).await()
+                }
+                Result.success(Unit)
+            } catch (e: Exception) {
+                dispatchSmsFallback(targetPhoneNumber, ciphertext)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+
+    private fun dispatchSmsFallback(phoneNumber: String?, ciphertext: String): Result<Unit> {
+        if (phoneNumber.isNullOrBlank()) {
+            return Result.failure(IllegalStateException("No network and no phone number available for fallback."))
+        }
+        
+        return try {
+            val smsManager = SmsManager.getDefault()
+            val message = "IMPART_ALERT:$ciphertext"
+            
+            val parts = smsManager.divideMessage(message)
+            smsManager.sendMultipartTextMessage(phoneNumber, null, parts, null, null)
+            
             Result.success(Unit)
         } catch (e: Exception) {
             e.printStackTrace()
